@@ -1,0 +1,56 @@
+{
+  "name": "SIGEM - Sistema de Información y Gestión Eclesial",
+  "short_name": "SIGEM",
+  "description": "Aplicación Web Progresiva para la Gestión Distrital y Estimación del Crecimiento de Membresía del Distrito Kollasuyo",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1f33",
+  "theme_color": "#1a3a5c",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pronóstico Holt",
+      "short_name": "Pronóstico",
+      "description": "Modelo predictivo de membresía activa",
+      "url": "/prediccion",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Registro de Membresía",
+      "short_name": "Membresía",
+      "description": "Directorio y consulta de miembros",
+      "url": "/membresia",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Iglesias y Circuitos",
+      "short_name": "Iglesias",
+      "description": "Padrón distrital de 24 iglesias",
+      "url": "/iglesias",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["productivity", "utilities", "business"]
+}
