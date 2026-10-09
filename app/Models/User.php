@@ -69,9 +69,28 @@ class User extends Authenticatable
         return in_array($this->rol, ['admin', 'distrito']);
     }
 
+    public function puedeGestionarIglesia(Iglesia $iglesia): bool
+    {
+        if ($this->hasAccesoDistrito()) {
+            return true;
+        }
+
+        if ($this->isCircuito()) {
+            return (int) $this->circuito_id === (int) $iglesia->circuito_id;
+        }
+
+        return $this->isLocal() && (int) $this->iglesia_id === (int) $iglesia->id;
+    }
+
+    public function puedeGestionarCircuito(Circuito $circuito): bool
+    {
+        return $this->hasAccesoDistrito()
+            || ($this->isCircuito() && (int) $this->circuito_id === (int) $circuito->id);
+    }
+
     public function getRolDisplayAttribute(): string
     {
-        return match($this->rol) {
+        return match ($this->rol) {
             'admin' => 'Administrador',
             'distrito' => 'Superintendente Distrito',
             'circuito' => 'Responsable Circuito',

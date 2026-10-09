@@ -4,6 +4,13 @@
 @section('page_title', 'Padron Distrital de Iglesias y Circuitos')
 
 @section('content')
+@if(Auth::user()?->hasAccesoDistrito())
+<div class="d-flex justify-content-end gap-2 mb-3">
+    <a href="{{ route('circuitos.index') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-diagram-3 me-1"></i> Gestionar circuitos</a>
+    <a href="{{ route('iglesias.create') }}" class="btn btn-sigem btn-sm"><i class="bi bi-plus-lg me-1"></i> Nueva iglesia</a>
+</div>
+@endif
+
 <!-- Filter -->
 <div class="card mb-4">
     <div class="card-body">

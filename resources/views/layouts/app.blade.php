@@ -609,6 +609,21 @@
                 </span>
             </a>
 
+            <a href="{{ route('actividades.index') }}" class="sigem-nav-link {{ request()->routeIs('actividades.*') ? 'active' : '' }}">
+                <i class="bi bi-calendar-event-fill"></i>
+                <span>Actividades</span>
+            </a>
+
+            <a href="{{ route('comunicaciones.index') }}" class="sigem-nav-link {{ request()->routeIs('comunicaciones.*') ? 'active' : '' }}">
+                <i class="bi bi-envelope-fill"></i>
+                <span>Comunicación interna</span>
+            </a>
+
+            <a href="{{ route('reportes.index') }}" class="sigem-nav-link {{ request()->routeIs('reportes.*') ? 'active' : '' }}">
+                <i class="bi bi-bar-chart-fill"></i>
+                <span>Reportes e indicadores</span>
+            </a>
+
             @if(Auth::user()?->hasAccesoDistrito())
             <div class="nav-section-title">Análisis Estratégico</div>
             <a href="{{ route('prediccion.index') }}" class="sigem-nav-link {{ request()->routeIs('prediccion.*') ? 'active' : '' }}">
@@ -623,6 +638,10 @@
 
             @if(Auth::user()?->hasAccesoDistrito())
             <div class="nav-section-title">Administración y Roles</div>
+            <a href="{{ route('circuitos.index') }}" class="sigem-nav-link {{ request()->routeIs('circuitos.*') ? 'active' : '' }}">
+                <i class="bi bi-diagram-3-fill"></i>
+                <span>Circuitos</span>
+            </a>
             <a href="{{ route('usuarios.index') }}" class="sigem-nav-link {{ request()->routeIs('usuarios.*') ? 'active' : '' }}">
                 <i class="bi bi-person-gear"></i>
                 <span>Usuarios y Pastores</span>
@@ -695,6 +714,17 @@
                 <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:1.2rem;"></i>
                 <div>{{ session('error') }}</div>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            @endif
+
+            @if($errors->any())
+            <div class="alert alert-danger mb-4" role="alert">
+                <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i> Revise los datos ingresados</div>
+                <ul class="mb-0 ps-3">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
             </div>
             @endif
 

@@ -2,17 +2,20 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Iglesia extends Model
 {
+    use HasFactory;
+
     protected $table = 'iglesias';
 
     protected $fillable = [
         'circuito_id', 'nombre', 'codigo', 'localidad', 'direccion',
-        'pastor_nombre', 'fecha_fundacion', 'estado', 'latitud', 'longitud',
+        'pastor_nombre', 'telefono', 'fecha_fundacion', 'estado', 'latitud', 'longitud',
     ];
 
     protected $casts = [

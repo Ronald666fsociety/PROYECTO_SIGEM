@@ -1,0 +1,12 @@
+@php($iglesia = $iglesia ?? null)
+<div class="row g-3">
+    <div class="col-md-6"><label for="nombre" class="form-label fw-semibold">Nombre de la iglesia</label><input id="nombre" name="nombre" class="form-control" required maxlength="255" value="{{ old('nombre', $iglesia?->nombre) }}"></div>
+    <div class="col-md-3"><label for="codigo" class="form-label fw-semibold">Código institucional</label><input id="codigo" name="codigo" class="form-control" required maxlength="50" value="{{ old('codigo', $iglesia?->codigo) }}"></div>
+    <div class="col-md-3"><label for="circuito_id" class="form-label fw-semibold">Circuito</label><select id="circuito_id" name="circuito_id" class="form-select" required><option value="">Seleccione...</option>@foreach($circuitos as $circuito)<option value="{{ $circuito->id }}" @selected((string) old('circuito_id', $iglesia?->circuito_id) === (string) $circuito->id)>{{ $circuito->nombre }}</option>@endforeach</select></div>
+    <div class="col-md-4"><label for="localidad" class="form-label fw-semibold">Localidad</label><input id="localidad" name="localidad" class="form-control" value="{{ old('localidad', $iglesia?->localidad) }}"></div>
+    <div class="col-md-8"><label for="direccion" class="form-label fw-semibold">Dirección</label><input id="direccion" name="direccion" class="form-control" value="{{ old('direccion', $iglesia?->direccion) }}"></div>
+    <div class="col-md-5"><label for="pastor_nombre" class="form-label fw-semibold">Pastor local</label><input id="pastor_nombre" name="pastor_nombre" class="form-control" value="{{ old('pastor_nombre', $iglesia?->pastor_nombre) }}"></div>
+    <div class="col-md-3"><label for="telefono" class="form-label fw-semibold">Teléfono</label><input id="telefono" name="telefono" class="form-control" maxlength="30" value="{{ old('telefono', $iglesia?->telefono) }}"></div>
+    <div class="col-md-2"><label for="fecha_fundacion" class="form-label fw-semibold">Fundación</label><input id="fecha_fundacion" type="date" name="fecha_fundacion" class="form-control" value="{{ old('fecha_fundacion', $iglesia?->fecha_fundacion?->format('Y-m-d')) }}"></div>
+    <div class="col-md-2"><label for="estado" class="form-label fw-semibold">Estado</label><select id="estado" name="estado" class="form-select"><option value="activo" @selected(old('estado', $iglesia?->estado ?? 'activo') === 'activo')>Activa</option><option value="inactivo" @selected(old('estado', $iglesia?->estado) === 'inactivo')>Inactiva</option></select></div>
+</div>

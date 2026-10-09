@@ -1,20 +1,13 @@
-const CACHE_NAME = 'sigem-pwa-v2';
+const CACHE_NAME = 'sigem-pwa-v3';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
-    '/',
-    '/login',
     '/offline.html',
     '/manifest.json',
     '/icon-192.png',
     '/icon-512.png',
     '/icon-maskable.png',
-    '/apple-touch-icon.png',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-    'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
-    'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'
+    '/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -44,27 +37,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
 
-    // Handle HTML page navigation
+    // Las páginas autenticadas nunca se guardan en caché: pueden contener datos personales.
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request)
-                .then((networkResponse) => {
-                    // Update cache with fresh version
-                    if (networkResponse.ok) {
-                        const copy = networkResponse.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-                    }
-                    return networkResponse;
-                })
-                .catch(async () => {
-                    // Try cache first
-                    const cachedResponse = await caches.match(request);
-                    if (cachedResponse) {
-                        return cachedResponse;
-                    }
-                    // Fallback to offline page
-                    return caches.match(OFFLINE_URL);
-                })
+                .catch(() => caches.match(OFFLINE_URL))
         );
         return;
     }

@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Actividad;
 use App\Models\Circuito;
+use App\Models\ConteoMembresia;
 use App\Models\Iglesia;
 use App\Models\Miembro;
-use App\Models\ConteoMembresia;
-use App\Models\Actividad;
-use App\Models\Comunicacion;
 use App\Models\Prediccion;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -83,12 +83,12 @@ class DashboardController extends Controller
             // Scope to the 6 churches in the coordinator's circuit
             $totalIglesias = Iglesia::where('circuito_id', $user->circuito_id)->where('estado', 'activo')->count();
             $totalCircuitos = 1;
-            $totalMiembros = Miembro::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $totalMiembros = Miembro::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->where('estado', 'activo')
                 ->count();
-            $totalUsuarios = \App\Models\User::where('circuito_id', $user->circuito_id)->where('estado', 'activo')->count();
+            $totalUsuarios = User::where('circuito_id', $user->circuito_id)->where('estado', 'activo')->count();
 
-            $ultimoConteo = ConteoMembresia::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $ultimoConteo = ConteoMembresia::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->orderBy('anio', 'desc')
                 ->orderBy('mes', 'desc')
                 ->first();
@@ -96,7 +96,7 @@ class DashboardController extends Controller
             $totalMembresiaActual = 0;
             $periodoActual = 'Sin datos';
             if ($ultimoConteo) {
-                $totalMembresiaActual = ConteoMembresia::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+                $totalMembresiaActual = ConteoMembresia::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                     ->where('anio', $ultimoConteo->anio)
                     ->where('mes', $ultimoConteo->mes)
                     ->sum('total_activos');
@@ -111,7 +111,7 @@ class DashboardController extends Controller
                     $mesAnterior = 12;
                     $anioAnterior--;
                 }
-                $anterior = ConteoMembresia::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+                $anterior = ConteoMembresia::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                     ->where('anio', $anioAnterior)
                     ->where('mes', $mesAnterior)
                     ->sum('total_activos');
@@ -120,14 +120,14 @@ class DashboardController extends Controller
                 }
             }
 
-            $nuevosEsteAnio = Miembro::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $nuevosEsteAnio = Miembro::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->whereYear('fecha_ingreso', $anioActual)
                 ->count();
-            $bajasEsteAnio = Miembro::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $bajasEsteAnio = Miembro::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->whereYear('fecha_baja', $anioActual)
                 ->count();
 
-            $serieReciente = ConteoMembresia::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $serieReciente = ConteoMembresia::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->select('anio', 'mes', DB::raw('SUM(total_activos) as total_activos'))
                 ->groupBy('anio', 'mes')
                 ->orderBy('anio', 'desc')
@@ -137,7 +137,7 @@ class DashboardController extends Controller
                 ->reverse()
                 ->values();
 
-            $porCategoria = Miembro::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $porCategoria = Miembro::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->where('estado', 'activo')
                 ->selectRaw('categoria, COUNT(*) as total')
                 ->groupBy('categoria')
@@ -147,7 +147,7 @@ class DashboardController extends Controller
             $porCircuito = collect();
             $ultimaPrediccion = null;
 
-            $actividades = Actividad::whereHas('iglesia', fn($q) => $q->where('circuito_id', $user->circuito_id))
+            $actividades = Actividad::whereHas('iglesia', fn ($q) => $q->where('circuito_id', $user->circuito_id))
                 ->where('fecha_inicio', '>=', now()->toDateString())
                 ->orderBy('fecha_inicio')
                 ->limit(5)
@@ -158,7 +158,7 @@ class DashboardController extends Controller
             $totalIglesias = Iglesia::where('estado', 'activo')->count();
             $totalCircuitos = Circuito::where('estado', 'activo')->count();
             $totalMiembros = Miembro::where('estado', 'activo')->count();
-            $totalUsuarios = \App\Models\User::where('estado', 'activo')->count();
+            $totalUsuarios = User::where('estado', 'activo')->count();
 
             $ultimoConteo = ConteoMembresia::orderBy('anio', 'desc')
                 ->orderBy('mes', 'desc')
@@ -193,9 +193,9 @@ class DashboardController extends Controller
             $bajasEsteAnio = Miembro::whereYear('fecha_baja', $anioActual)->count();
 
             $serieReciente = ConteoMembresia::select(
-                    'anio', 'mes',
-                    DB::raw('SUM(total_activos) as total_activos')
-                )
+                'anio', 'mes',
+                DB::raw('SUM(total_activos) as total_activos')
+            )
                 ->groupBy('anio', 'mes')
                 ->orderBy('anio', 'desc')
                 ->orderBy('mes', 'desc')
@@ -217,6 +217,7 @@ class DashboardController extends Controller
                     foreach ($circuito->iglesias as $ig) {
                         $total += $ig->miembrosActivos->count();
                     }
+
                     return [
                         'nombre' => $circuito->nombre,
                         'total' => $total,

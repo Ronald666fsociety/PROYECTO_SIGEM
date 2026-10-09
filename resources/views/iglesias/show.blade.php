@@ -8,6 +8,9 @@
     <a href="{{ route('iglesias.index') }}" class="btn btn-sigem-outline btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Volver a Iglesias
     </a>
+    @if(Auth::user()?->hasAccesoDistrito())
+        <a href="{{ route('iglesias.edit', $iglesia) }}" class="btn btn-sigem-outline btn-sm"><i class="bi bi-pencil me-1"></i> Editar iglesia</a>
+    @endif
 </div>
 
 <!-- Header Card -->
