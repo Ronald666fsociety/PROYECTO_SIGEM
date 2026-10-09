@@ -17,6 +17,10 @@
         ])->filter(fn ($fila) => $fila['mae'] !== null);
     }
     $esPrueba = $prediccion->modo_datos === 'prueba_funcional';
+    $esViable = $prediccion->es_viable;
+    $colorEstado = $esPrueba ? '#d97706' : ($esViable ? '#198754' : '#c2410c');
+    $fondoEstado = $esPrueba ? '#fef3c7' : ($esViable ? '#dcfce7' : '#ffedd5');
+    $iconoEstado = $esPrueba ? 'beaker-fill' : ($esViable ? 'check-circle-fill' : 'exclamation-triangle-fill');
 @endphp
 
 <div class="d-flex align-items-center justify-content-between mb-4">
@@ -27,13 +31,13 @@
     <button onclick="window.print()" class="btn btn-sigem-outline btn-sm"><i class="bi bi-printer me-1"></i> Imprimir</button>
 </div>
 
-<div class="card mb-4" style="border-left:4px solid {{ $esPrueba ? '#d97706' : '#198754' }};">
+<div class="card mb-4" style="border-left:4px solid {{ $colorEstado }};">
     <div class="card-body d-flex align-items-start gap-3">
-        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;border-radius:12px;background:{{ $esPrueba ? '#fef3c7' : '#dcfce7' }};color:{{ $esPrueba ? '#92400e' : '#166534' }};">
-            <i class="bi bi-{{ $esPrueba ? 'beaker-fill' : 'check-circle-fill' }} fs-4"></i>
+        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;border-radius:12px;background:{{ $fondoEstado }};color:{{ $colorEstado }};">
+            <i class="bi bi-{{ $iconoEstado }} fs-4"></i>
         </div>
         <div>
-            <h5 class="fw-bold mb-1">{{ $esPrueba ? 'Prueba funcional con datos sintéticos' : 'Evaluación con datos históricos reales' }}</h5>
+            <h5 class="fw-bold mb-1">{{ $prediccion->estado_evaluacion_display }}</h5>
             <p class="text-muted mb-0" style="font-size:.85rem;">{{ $prediccion->observaciones }}</p>
         </div>
     </div>

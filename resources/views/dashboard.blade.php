@@ -184,13 +184,21 @@
             </div>
             <div class="card-body">
                 @if($ultimaPrediccion)
-                <div class="d-flex align-items-center gap-3 mb-3 p-3 rounded" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
-                    <div style="width:42px; height:42px; border-radius:10px; background:#16a34a; display:flex; align-items:center; justify-content:center; color:#fff;">
-                        <i class="bi bi-check-lg" style="font-size:1.4rem;"></i>
+                @php
+                    $esPruebaPredictiva = $ultimaPrediccion->modo_datos === 'prueba_funcional';
+                    $esViablePredictiva = $ultimaPrediccion->es_viable;
+                    $fondoPredictivo = $esPruebaPredictiva ? '#fffbeb' : ($esViablePredictiva ? '#f0fdf4' : '#fff7ed');
+                    $bordePredictivo = $esPruebaPredictiva ? '#fde68a' : ($esViablePredictiva ? '#bbf7d0' : '#fed7aa');
+                    $colorPredictivo = $esPruebaPredictiva ? '#92400e' : ($esViablePredictiva ? '#166534' : '#9a3412');
+                    $iconoPredictivo = $esPruebaPredictiva ? 'beaker' : ($esViablePredictiva ? 'check-lg' : 'exclamation-triangle');
+                @endphp
+                <div class="d-flex align-items-center gap-3 mb-3 p-3 rounded" style="background: {{ $fondoPredictivo }}; border: 1px solid {{ $bordePredictivo }};">
+                    <div style="width:42px; height:42px; border-radius:10px; background:{{ $colorPredictivo }}; display:flex; align-items:center; justify-content:center; color:#fff;">
+                        <i class="bi bi-{{ $iconoPredictivo }}" style="font-size:1.4rem;"></i>
                     </div>
                     <div>
-                        <div class="fw-bold" style="font-size:0.92rem; color:#166534;">Modelo Evaluado y Viable</div>
-                        <div style="font-size:0.78rem; color:#15803d;">
+                        <div class="fw-bold" style="font-size:0.92rem; color:{{ $colorPredictivo }};">{{ $ultimaPrediccion->estado_evaluacion_display }}</div>
+                        <div style="font-size:0.78rem; color:{{ $colorPredictivo }};">
                             Ultimo ajuste: {{ $ultimaPrediccion->created_at->format('d/m/Y H:i') }} &bull; Horizonte: {{ $ultimaPrediccion->horizonte_meses }} meses
                         </div>
                     </div>
@@ -211,8 +219,8 @@
                     </div>
                     <div class="col-4">
                         <div class="p-2 border rounded bg-light">
-                            <div class="fw-bold text-success">{{ $ultimaPrediccion->porcentaje_ventanas }}%</div>
-                            <div style="font-size:0.7rem; color:#64748b;">Superadas</div>
+                            <div class="fw-bold text-dark">{{ $ultimaPrediccion->ventanas_evaluadas }}</div>
+                            <div style="font-size:0.7rem; color:#64748b;">Orígenes evaluados</div>
                         </div>
                     </div>
                 </div>

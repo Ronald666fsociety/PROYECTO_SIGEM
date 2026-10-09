@@ -84,6 +84,10 @@
                         {{ $ultimaPrediccion->modo_datos === 'prueba_funcional' ? 'Sintéticos / prueba' : 'Históricos reales' }}
                     </span>
                 </div>
+                <div class="d-flex justify-content-between mb-2 gap-3">
+                    <span class="text-muted">Conclusión</span>
+                    <strong class="text-end">{{ $ultimaPrediccion->estado_evaluacion_display }}</strong>
+                </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">Menor MAE final</span>
                     <strong>{{ $nombresMetodos[$ultimaPrediccion->mejor_metodo] ?? 'Sin determinar' }}</strong>
@@ -124,6 +128,7 @@
                     <tr>
                         <th>Fecha</th>
                         <th>Datos</th>
+                        <th>Conclusión</th>
                         <th>Mejor MAE final</th>
                         <th>MAE Holt</th>
                         <th>RMSE Holt</th>
@@ -136,6 +141,7 @@
                     <tr>
                         <td>{{ $evaluacion->created_at->format('d/m/Y H:i') }}</td>
                         <td>{{ $evaluacion->modo_datos === 'prueba_funcional' ? 'Prueba sintética' : 'Históricos reales' }}</td>
+                        <td>{{ $evaluacion->estado_evaluacion_display }}</td>
                         <td>{{ $nombresMetodos[$evaluacion->mejor_metodo] ?? 'No registrado' }}</td>
                         <td>{{ number_format((float) $evaluacion->mae, 2) }}</td>
                         <td>{{ number_format((float) $evaluacion->rmse, 2) }}</td>
@@ -143,7 +149,7 @@
                         <td><a href="{{ route('prediccion.resultado', $evaluacion) }}" class="btn btn-sigem-outline btn-sm"><i class="bi bi-eye-fill"></i> Ver</a></td>
                     </tr>
                     @empty
-                    <tr><td colspan="7" class="text-center text-muted py-4">Todavía no existen evaluaciones registradas.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Todavía no existen evaluaciones registradas.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -11,27 +11,38 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class PrediccionController extends Controller
 {
     private function getPythonExecutable(): string
     {
-        $candidates = [
-            'C:\\Users\\RON\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe',
-            'C:\\Users\\RON\\AppData\\Local\\Python\\bin\\python.exe',
-            'C:\\Python314\\python.exe',
-            'C:\\Python313\\python.exe',
-            'C:\\Python312\\python.exe',
-        ];
-
-        foreach ($candidates as $candidate) {
-            if (is_file($candidate)) {
-                return $candidate;
-            }
+        $configured = trim((string) config('sigem.python_executable', 'auto'));
+        if ($configured !== '' && $configured !== 'auto') {
+            return $configured;
         }
 
-        return 'python';
+        if (PHP_OS_FAMILY === 'Windows') {
+            $localAppData = getenv('LOCALAPPDATA');
+            if (is_string($localAppData) && $localAppData !== '') {
+                $patterns = [
+                    $localAppData.'/Python/*/python.exe',
+                    $localAppData.'/Programs/Python/Python*/python.exe',
+                ];
+                foreach ($patterns as $pattern) {
+                    $candidates = glob($pattern) ?: [];
+                    rsort($candidates, SORT_NATURAL);
+                    if ($candidates !== []) {
+                        return $candidates[0];
+                    }
+                }
+            }
+
+            return 'python';
+        }
+
+        return 'python3';
     }
 
     private function obtenerSerieHistorica(): Collection
@@ -59,7 +70,6 @@ class PrediccionController extends Controller
             ->get();
         $serieHistorica = $this->obtenerSerieHistorica();
         $ultimaPrediccion = Prediccion::query()
-            ->where('estado', 'viable')
             ->latest()
             ->with('valores')
             ->first();
@@ -74,8 +84,9 @@ class PrediccionController extends Controller
         ]);
 
         $horizonte = (int) $validated['horizonte'];
-        $dbPath = database_path('database.sqlite');
-        $outputPath = storage_path('app/prediccion_resultado.json');
+        $executionId = (string) Str::uuid();
+        $inputPath = storage_path("app/prediccion_entrada_{$executionId}.json");
+        $outputPath = storage_path("app/prediccion_resultado_{$executionId}.json");
         $pythonScript = base_path('python/holt_prediccion.py');
         $pythonExe = $this->getPythonExecutable();
 
@@ -84,22 +95,41 @@ class PrediccionController extends Controller
                 ->with('error', "El script predictivo no se encuentra en {$pythonScript}.");
         }
 
-        if (is_file($outputPath)) {
-            unlink($outputPath);
-        }
+        $serieHistorica = $this->obtenerSerieHistorica();
+        file_put_contents($inputPath, json_encode([
+            'serie' => $serieHistorica->map(fn ($fila): array => [
+                'anio' => (int) $fila->anio,
+                'mes' => (int) $fila->mes,
+                'total_activos' => (float) $fila->total_activos,
+                'iglesias_reportadas' => (int) $fila->iglesias_reportadas,
+                'registros_iglesia_mes' => (int) $fila->iglesias_reportadas,
+                'registros_sinteticos' => (bool) $fila->contiene_sinteticos ? 1 : 0,
+            ])->values()->all(),
+        ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 
-        $command = '"'.$pythonExe.'" "'.$pythonScript.'" --db-path "'.$dbPath
-            .'" --horizonte '.$horizonte.' --output "'.$outputPath.'"';
-        $result = Process::timeout(120)->run($command);
+        $result = Process::timeout(120)->run([
+            $pythonExe,
+            $pythonScript,
+            '--input-json',
+            $inputPath,
+            '--horizonte',
+            (string) $horizonte,
+            '--output',
+            $outputPath,
+        ]);
 
         if (! is_file($outputPath)) {
             $error = trim($result->errorOutput() ?: $result->output());
+
+            @unlink($inputPath);
 
             return redirect()->route('prediccion.index')
                 ->with('error', 'No se pudo ejecutar la evaluación predictiva: '.($error ?: 'sin salida del motor.'));
         }
 
         $data = json_decode((string) file_get_contents($outputPath), true);
+        @unlink($inputPath);
+        @unlink($outputPath);
         if (! is_array($data)) {
             return redirect()->route('prediccion.index')
                 ->with('error', 'El motor predictivo devolvió un resultado ilegible.');
@@ -120,6 +150,7 @@ class PrediccionController extends Controller
         $fechaCorte = isset($data['parametros']['ultimo_corte'])
             ? $data['parametros']['ultimo_corte'].'-01'
             : null;
+        $estado = $this->clasificarResultado($data);
 
         $prediccion = DB::transaction(function () use (
             $data,
@@ -130,6 +161,7 @@ class PrediccionController extends Controller
             $regresionLineal,
             $protocolo,
             $fechaCorte,
+            $estado,
         ): Prediccion {
             $prediccion = Prediccion::create([
                 'fecha_ejecucion' => now(),
@@ -148,8 +180,7 @@ class PrediccionController extends Controller
                 'ventanas_superadas' => 0,
                 'meses_entrenamiento' => $data['parametros']['meses_entrenamiento_final'] ?? 0,
                 'horizonte_meses' => $data['parametros']['horizonte_meses'] ?? 6,
-                // El esquema heredado solo admite viable/no_viable/pendiente.
-                'estado' => 'viable',
+                'estado' => $estado,
                 'modo_datos' => $data['modo_datos'],
                 'mejor_metodo' => $data['metricas']['mejor_metodo'] ?? null,
                 'observaciones' => $data['observaciones'],
@@ -213,11 +244,27 @@ class PrediccionController extends Controller
     public function apiUltimaPrediccion(): JsonResponse
     {
         $prediccion = Prediccion::query()
-            ->where('estado', 'viable')
             ->latest()
             ->with('valores')
             ->first();
 
         return response()->json($prediccion);
+    }
+
+    /**
+     * Clasifica la ejecución sin confundir una prueba sintética con validación real.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function clasificarResultado(array $data): string
+    {
+        if (($data['modo_datos'] ?? null) === 'prueba_funcional') {
+            return 'pendiente';
+        }
+
+        $holtEsMejor = ($data['metricas']['mejor_metodo'] ?? null) === 'holt';
+        $tieneAdvertencias = ! empty($data['advertencias'] ?? []);
+
+        return $holtEsMejor && ! $tieneAdvertencias ? 'viable' : 'no_viable';
     }
 }

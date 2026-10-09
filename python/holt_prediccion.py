@@ -82,8 +82,36 @@ def obtener_serie_distrital(db_path: str) -> pd.DataFrame:
     finally:
         conexion.close()
 
+    return preparar_serie_distrital(serie)
+
+
+def obtener_serie_json(input_path: str) -> pd.DataFrame:
+    """Carga la serie agregada exportada por Laravel sin depender del motor SQL."""
+    contenido = json.loads(Path(input_path).read_text(encoding="utf-8"))
+    filas = contenido.get("serie", contenido) if isinstance(contenido, dict) else contenido
+    if not isinstance(filas, list):
+        raise ValueError("El archivo de entrada no contiene una serie mensual valida.")
+
+    return preparar_serie_distrital(pd.DataFrame(filas))
+
+
+def preparar_serie_distrital(serie: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza la serie agregada proveniente de SQLite, MySQL o un archivo JSON."""
     if serie.empty:
         return pd.DataFrame()
+
+    columnas_requeridas = {
+        "anio",
+        "mes",
+        "total_activos",
+        "iglesias_reportadas",
+        "registros_sinteticos",
+    }
+    faltantes = columnas_requeridas.difference(serie.columns)
+    if faltantes:
+        raise ValueError(
+            "Faltan columnas requeridas en la serie: " + ", ".join(sorted(faltantes))
+        )
 
     serie["periodo"] = pd.to_datetime(
         serie.apply(
@@ -92,6 +120,8 @@ def obtener_serie_distrital(db_path: str) -> pd.DataFrame:
     )
     serie = serie.sort_values("periodo").reset_index(drop=True)
     serie["total_activos"] = serie["total_activos"].astype(float)
+    serie["iglesias_reportadas"] = serie["iglesias_reportadas"].astype(int)
+    serie["registros_sinteticos"] = serie["registros_sinteticos"].astype(int)
     return serie
 
 
@@ -443,9 +473,8 @@ def _ajustar_holt_final(valores: np.ndarray, horizonte: int) -> tuple:
     return modelo, np.asarray(modelo.forecast(horizonte), dtype=float)
 
 
-def ejecutar_pronostico(db_path: str, horizonte: int = 6) -> dict:
+def ejecutar_pronostico_serie(serie: pd.DataFrame, horizonte: int = 6) -> dict:
     horizonte = max(1, min(int(horizonte), HORIZONTE_EVALUACION))
-    serie = obtener_serie_distrital(db_path)
     compuerta = verificar_compuerta(serie)
 
     if not compuerta["aprobada"]:
@@ -589,16 +618,35 @@ def ejecutar_pronostico(db_path: str, horizonte: int = 6) -> dict:
     }
 
 
+def ejecutar_pronostico(db_path: str, horizonte: int = 6) -> dict:
+    """Mantiene compatibilidad con las pruebas y ejecuciones locales en SQLite."""
+    return ejecutar_pronostico_serie(obtener_serie_distrital(db_path), horizonte)
+
+
+def ejecutar_pronostico_json(input_path: str, horizonte: int = 6) -> dict:
+    """Ejecuta el protocolo con la serie agregada y exportada por Laravel."""
+    return ejecutar_pronostico_serie(obtener_serie_json(input_path), horizonte)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Modelo predictivo Holt de SIGEM")
-    parser.add_argument("--db-path", required=True, help="Ruta a database.sqlite")
+    origen = parser.add_mutually_exclusive_group(required=True)
+    origen.add_argument("--db-path", help="Ruta a database.sqlite para compatibilidad")
+    origen.add_argument(
+        "--input-json",
+        help="Serie mensual agregada exportada por Laravel desde la base configurada",
+    )
     parser.add_argument(
         "--horizonte", type=int, default=6, help="Horizonte entre 1 y 6 meses"
     )
     parser.add_argument("--output", help="Ruta del archivo JSON de salida")
     argumentos = parser.parse_args()
 
-    resultado = ejecutar_pronostico(argumentos.db_path, argumentos.horizonte)
+    resultado = (
+        ejecutar_pronostico_json(argumentos.input_json, argumentos.horizonte)
+        if argumentos.input_json
+        else ejecutar_pronostico(argumentos.db_path, argumentos.horizonte)
+    )
     salida = json.dumps(resultado, ensure_ascii=False, indent=2)
     if argumentos.output:
         ruta_salida = Path(argumentos.output)

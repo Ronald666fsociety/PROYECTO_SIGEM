@@ -49,16 +49,19 @@ class Prediccion extends Model
 
     public function getEsViableAttribute(): bool
     {
-        // Compatibilidad con el esquema heredado: "viable" significa evaluacion ejecutada.
-        return $this->estado === 'viable';
+        return $this->modo_datos === 'evaluacion_real' && $this->estado === 'viable';
     }
 
-    public function getPorcentajeVentanasAttribute(): float
+    public function getEstadoEvaluacionDisplayAttribute(): string
     {
-        if ($this->ventanas_evaluadas == 0) {
-            return 0;
+        if ($this->modo_datos === 'prueba_funcional') {
+            return 'Prueba funcional pendiente de validación real';
         }
 
-        return round(($this->ventanas_superadas / $this->ventanas_evaluadas) * 100, 1);
+        return match ($this->estado) {
+            'viable' => 'Holt obtuvo desempeño favorable',
+            'no_viable' => 'Holt no superó los métodos de referencia',
+            default => 'Evaluación pendiente',
+        };
     }
 }

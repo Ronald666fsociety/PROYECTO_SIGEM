@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -165,6 +166,20 @@ class MotorPredictivoTest(unittest.TestCase):
                 for error in evaluacion["errores_ajuste"]
             )
         )
+
+    def test_acepta_serie_json_exportada_por_laravel(self) -> None:
+        self.poblar(sintetico=False)
+        serie = holt_prediccion.obtener_serie_distrital(str(self.db_path))
+        filas = serie.drop(columns=["periodo"]).to_dict(orient="records")
+        entrada = self.db_path.with_suffix(".json")
+        entrada.write_text(json.dumps({"serie": filas}), encoding="utf-8")
+        self.addCleanup(entrada.unlink, missing_ok=True)
+
+        resultado = holt_prediccion.ejecutar_pronostico_json(str(entrada), 6)
+
+        self.assertEqual(resultado["estado"], "evaluado")
+        self.assertEqual(resultado["modo_datos"], "evaluacion_real")
+        self.assertEqual(len(resultado["pronosticos"]), 6)
 
 
 if __name__ == "__main__":
