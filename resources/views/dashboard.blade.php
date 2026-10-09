@@ -77,7 +77,13 @@
             <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
             <div class="kpi-value">
                 @if($ultimaPrediccion)
-                    {{ $ultimaPrediccion->porcentaje_ventanas }}%
+                    @if($ultimaPrediccion->modo_datos === 'prueba_funcional')
+                        <span style="font-size:1.15rem;">PRUEBA</span>
+                    @elseif($ultimaPrediccion->es_viable)
+                        <span style="font-size:1.15rem;">FAVORABLE</span>
+                    @else
+                        <span style="font-size:1.15rem;">REVISAR</span>
+                    @endif
                 @else
                     --
                 @endif
@@ -87,7 +93,7 @@
                 <i class="bi bi-shield-check"></i>
                 <span>
                     @if($ultimaPrediccion)
-                        Viable &bull; MAE: {{ number_format($ultimaPrediccion->mae, 2) }}
+                        {{ $ultimaPrediccion->estado_evaluacion_display }} &bull; MAE: {{ number_format($ultimaPrediccion->mae, 2) }}
                     @else
                         Pendiente de ejecución
                     @endif
@@ -226,7 +232,11 @@
                 </div>
 
                 <div style="font-size:0.8rem; color:#64748b;" class="mb-3">
-                    {{ $ultimaPrediccion->observaciones }}
+                    @if($esPruebaPredictiva)
+                        Resultado calculado con datos sintéticos para comprobar el funcionamiento. No constituye evidencia de precisión predictiva real.
+                    @else
+                        {{ $ultimaPrediccion->observaciones }}
+                    @endif
                 </div>
                 @else
                 <div class="text-center py-4 text-muted">

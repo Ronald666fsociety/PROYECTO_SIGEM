@@ -38,7 +38,13 @@
         </div>
         <div>
             <h5 class="fw-bold mb-1">{{ $prediccion->estado_evaluacion_display }}</h5>
-            <p class="text-muted mb-0" style="font-size:.85rem;">{{ $prediccion->observaciones }}</p>
+            <p class="text-muted mb-0" style="font-size:.85rem;">
+                @if($esPrueba)
+                    Resultado generado con datos sintéticos para verificar el funcionamiento de SIGEM. La precisión deberá evaluarse nuevamente con los históricos reales, continuos y autorizados de las 24 iglesias.
+                @else
+                    {{ $prediccion->observaciones }}
+                @endif
+            </p>
         </div>
     </div>
 </div>
