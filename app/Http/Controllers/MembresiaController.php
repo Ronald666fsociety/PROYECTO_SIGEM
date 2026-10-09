@@ -207,20 +207,14 @@ class MembresiaController extends Controller
         $this->autorizarMiembro($miembro);
         $user = auth()->user();
 
-        if ($user->isAdmin()) {
-            // Admin can permanently remove if necessary
-            $miembro->delete();
-            $mensaje = 'Miembro eliminado permanentemente de la base de datos.';
-        } else {
-            // Pastors and coordinators register it as administrative dismissal
-            $miembro->update([
-                'estado' => 'inactivo',
-                'fecha_baja' => now()->toDateString(),
-                'motivo_baja' => 'Baja registrada por '.$user->rol_display.' ('.$user->name.')',
-            ]);
-            $mensaje = 'El miembro ha sido dado de baja en el padrón local.';
-        }
+        // La baja es administrativa: se conserva el historial institucional y su trazabilidad.
+        $miembro->update([
+            'estado' => 'inactivo',
+            'fecha_baja' => now()->toDateString(),
+            'motivo_baja' => 'Baja registrada por '.$user->rol_display.' ('.$user->name.')',
+        ]);
 
-        return redirect()->route('membresia.index')->with('success', $mensaje);
+        return redirect()->route('membresia.index')
+            ->with('success', 'El miembro ha sido dado de baja; su historial se conserva.');
     }
 }

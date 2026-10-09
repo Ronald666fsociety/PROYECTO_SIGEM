@@ -2,17 +2,21 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConteoMembresia extends Model
 {
+    use HasFactory;
+
     protected $table = 'conteos_membresia';
 
     protected $fillable = [
         'iglesia_id', 'anio', 'mes', 'fecha_corte',
         'total_activos', 'total_inactivos', 'total_nuevos', 'total_transferidos', 'total_bajas',
         'estado', 'es_sintetico', 'registrado_por',
+        'fuente_datos', 'version_datos', 'archivo_origen', 'hash_archivo', 'observaciones_calidad',
     ];
 
     protected $casts = [

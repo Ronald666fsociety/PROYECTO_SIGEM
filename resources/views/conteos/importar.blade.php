@@ -100,6 +100,23 @@
                 <form method="POST" action="{{ route('conteos.procesar-importar') }}" enctype="multipart/form-data">
                     @csrf
                     <div class="mb-3">
+                        <label class="form-label fw-semibold" for="fuente_datos" style="font-size:0.82rem;">Fuente institucional autorizada *</label>
+                        <input type="text" id="fuente_datos" name="fuente_datos" class="form-control @error('fuente_datos') is-invalid @enderror" value="{{ old('fuente_datos') }}" maxlength="150" placeholder="Ej.: libros de membresía y reportes distritales autorizados" required>
+                        @error('fuente_datos')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold" for="version_datos" style="font-size:0.82rem;">Versión o fecha de corte</label>
+                            <input type="text" id="version_datos" name="version_datos" class="form-control" value="{{ old('version_datos') }}" maxlength="80" placeholder="Ej.: corte 31-12-2025">
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold" for="observaciones_calidad" style="font-size:0.82rem;">Observaciones de depuración</label>
+                            <input type="text" id="observaciones_calidad" name="observaciones_calidad" class="form-control" value="{{ old('observaciones_calidad') }}" maxlength="500" placeholder="Recuperaciones o verificaciones realizadas">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label fw-semibold" style="font-size:0.82rem;">Seleccionar Archivo CSV *</label>
                         <input type="file" name="archivo_csv" class="form-control" accept=".csv,.txt" required>
                         <div class="form-text" style="font-size:0.75rem;">Formatos admitidos: .csv codificado en UTF-8 o ANSI separado por comas (,).</div>
@@ -155,12 +172,18 @@
                 <p class="text-muted" style="font-size:0.8rem;">
                     Puede restaurar la serie sintética de 45 meses para comprobar pantallas, validaciones y flujo técnico. Sus métricas no deben presentarse como precisión predictiva real.
                 </p>
+                @if(config('sigem.allow_synthetic_data'))
                 <form method="POST" action="{{ route('conteos.regenerar') }}">
                     @csrf
                     <button type="submit" class="btn btn-outline-secondary btn-sm w-100" onclick="return confirm('¿Desea restaurar los datos ficticios de prueba de 45 meses?')">
                         <i class="bi bi-magic me-1"></i> Restaurar Serie Ficticia de Prueba
                     </button>
                 </form>
+                @else
+                <div class="alert alert-light border mb-0 py-2" style="font-size:0.78rem;">
+                    La generación sintética está deshabilitada en este entorno para proteger los datos institucionales.
+                </div>
+                @endif
             </div>
         </div>
     </div>

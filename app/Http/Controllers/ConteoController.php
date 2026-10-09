@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ConteoMembresia;
 use App\Models\Iglesia;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ConteoController extends Controller
@@ -93,9 +96,7 @@ class ConteoController extends Controller
             ->paginate(24);
 
         $anios = ConteoMembresia::select('anio')->distinct()->orderBy('anio', 'desc')->pluck('anio');
-        $iglesias = $user->isLocal()
-            ? Iglesia::where('id', $user->iglesia_id)->get()
-            : Iglesia::where('estado', 'activo')->orderBy('nombre')->get();
+        $iglesias = $this->iglesiasPermitidas($user);
 
         $resumenCompuerta = $this->obtenerResumenCompuerta();
         $totalMesesDistritales = $resumenCompuerta['total_meses'];
@@ -107,9 +108,7 @@ class ConteoController extends Controller
     public function create()
     {
         $user = auth()->user();
-        $iglesias = $user->isLocal()
-            ? Iglesia::where('id', $user->iglesia_id)->get()
-            : Iglesia::where('estado', 'activo')->orderBy('nombre')->get();
+        $iglesias = $this->iglesiasPermitidas($user);
 
         $anioActual = (int) date('Y');
         $mesActual = (int) date('n');
@@ -134,8 +133,9 @@ class ConteoController extends Controller
             'estado' => 'required|in:borrador,validado,cerrado',
         ]);
 
-        if ($user->isLocal() && (int) $validated['iglesia_id'] !== (int) $user->iglesia_id) {
-            abort(403, 'No tiene autorización para registrar conteos en otra iglesia.');
+        $iglesia = Iglesia::findOrFail($validated['iglesia_id']);
+        if (! $user->puedeGestionarIglesia($iglesia)) {
+            abort(403, 'No tiene autorización para registrar conteos fuera de su jurisdicción.');
         }
 
         $validated['total_inactivos'] = $validated['total_inactivos'] ?? 0;
@@ -144,6 +144,9 @@ class ConteoController extends Controller
         $validated['total_bajas'] = $validated['total_bajas'] ?? 0;
         $validated['fecha_corte'] = $validated['fecha_corte'] ?? date('Y-m-t', strtotime("{$validated['anio']}-{$validated['mes']}-01"));
         $validated['es_sintetico'] = false;
+        $validated['fuente_datos'] = 'registro_mensual_sigem';
+        $validated['version_datos'] = 'registro_operativo';
+        $validated['observaciones_calidad'] = 'Registro ingresado y validado dentro de SIGEM.';
         $validated['registrado_por'] = $user->id;
 
         ConteoMembresia::updateOrCreate(
@@ -226,19 +229,23 @@ class ConteoController extends Controller
 
     public function procesarImportacion(Request $request)
     {
-        $request->validate([
-            'archivo_csv' => 'required|file|mimes:csv,txt|max:10240',
-            'reemplazar_existentes' => 'nullable|boolean',
+        $validated = $request->validate([
+            'archivo_csv' => ['required', 'file', 'mimes:csv,txt', 'max:10240'],
+            'fuente_datos' => ['required', 'string', 'max:150'],
+            'version_datos' => ['nullable', 'string', 'max:80'],
+            'observaciones_calidad' => ['nullable', 'string', 'max:500'],
+            'reemplazar_existentes' => ['nullable', 'boolean'],
         ]);
 
         $file = $request->file('archivo_csv');
         $reemplazar = $request->boolean('reemplazar_existentes');
-
         $iglesiasMap = Iglesia::pluck('id', 'codigo')->toArray();
-        $iglesiasNombreMap = Iglesia::pluck('id', 'nombre')->toArray();
+        $handle = fopen($file->getRealPath(), 'r');
+        if ($handle === false) {
+            return back()->withInput()->with('error', 'No se pudo abrir el archivo CSV subido.');
+        }
 
-        if (($handle = fopen($file->getRealPath(), 'r')) !== false) {
-            // Remove BOM if present
+        try {
             $bom = fread($handle, 3);
             if ($bom !== chr(0xEF).chr(0xBB).chr(0xBF)) {
                 rewind($handle);
@@ -246,106 +253,169 @@ class ConteoController extends Controller
 
             $header = fgetcsv($handle, 2000, ',');
             if (! $header) {
-                return back()->with('error', 'El archivo CSV está vacío o tiene un formato inválido.');
+                return back()->withInput()->with('error', 'El archivo CSV está vacío o tiene un formato inválido.');
             }
 
-            // Normalize header names
-            $header = array_map(function ($h) {
-                return strtolower(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $h)));
-            }, $header);
-
-            $userId = auth()->id();
-
-            DB::beginTransaction();
-            try {
-                if ($reemplazar) {
-                    // Truncate or clean existing counts to substitute fictitious data with real data
-                    ConteoMembresia::truncate();
-                }
-
-                $importados = 0;
-                $linea = 1;
-
-                while (($data = fgetcsv($handle, 2000, ',')) !== false) {
-                    $linea++;
-                    if (count($data) < 6) {
-                        continue; // Skip incomplete lines
-                    }
-
-                    $row = array_combine(array_slice($header, 0, count($data)), $data);
-
-                    $codigo = trim($row['codigo_iglesia'] ?? '');
-                    $nombre = trim($row['nombre_iglesia'] ?? '');
-                    $anio = (int) ($row['anio'] ?? 0);
-                    $mes = (int) ($row['mes'] ?? 0);
-                    $totalActivos = (int) ($row['total_activos'] ?? 0);
-                    $totalInactivos = (int) ($row['total_inactivos'] ?? 0);
-                    $totalNuevos = (int) ($row['total_nuevos'] ?? 0);
-                    $totalTransferidos = (int) ($row['total_transferidos'] ?? 0);
-                    $totalBajas = (int) ($row['total_bajas'] ?? 0);
-                    $fechaCorte = ! empty($row['fecha_corte']) ? trim($row['fecha_corte']) : date('Y-m-t', strtotime("{$anio}-{$mes}-01"));
-                    $estado = strtolower(trim($row['estado'] ?? 'cerrado'));
-
-                    if (! in_array($estado, ['borrador', 'validado', 'cerrado'])) {
-                        $estado = 'cerrado';
-                    }
-
-                    // Find church id by code or by name
-                    $iglesiaId = $iglesiasMap[$codigo] ?? ($iglesiasNombreMap[$nombre] ?? null);
-                    if (! $iglesiaId) {
-                        continue; // Skip unrecognized church
-                    }
-
-                    if ($anio < 2000 || $mes < 1 || $mes > 12) {
-                        continue;
-                    }
-
-                    ConteoMembresia::updateOrCreate(
-                        [
-                            'iglesia_id' => $iglesiaId,
-                            'anio' => $anio,
-                            'mes' => $mes,
-                        ],
-                        [
-                            'total_activos' => $totalActivos,
-                            'total_inactivos' => $totalInactivos,
-                            'total_nuevos' => $totalNuevos,
-                            'total_transferidos' => $totalTransferidos,
-                            'total_bajas' => $totalBajas,
-                            'fecha_corte' => $fechaCorte,
-                            'estado' => $estado,
-                            'es_sintetico' => false,
-                            'registrado_por' => $userId,
-                        ]
-                    );
-
-                    $importados++;
-                }
-
-                fclose($handle);
-                DB::commit();
-
-                $compuerta = $this->obtenerResumenCompuerta();
-                $mensaje = "Se importaron {$importados} registros históricos reales. Total de meses distritales: {$compuerta['total_meses']}.";
-                if ($compuerta['aprobada_validacion_real']) {
-                    $mensaje .= ' La serie cumple suficiencia, continuidad y cobertura de las 24 iglesias para la evaluación temporal.';
-                } else {
-                    $mensaje .= ' La validación predictiva continuará pendiente hasta reunir al menos 36 meses continuos y completos de las 24 iglesias.';
-                }
-
-                return redirect()->route('conteos.index')->with('success', $mensaje);
-            } catch (\Exception $e) {
-                DB::rollBack();
-
-                return back()->with('error', 'Error durante la importación: '.$e->getMessage());
+            $header = array_map(
+                fn ($column): string => Str::of((string) $column)->ascii()->lower()->trim()->replace(' ', '_')->toString(),
+                $header,
+            );
+            $requiredColumns = ['codigo_iglesia', 'anio', 'mes', 'total_activos', 'estado'];
+            $missingColumns = array_diff($requiredColumns, $header);
+            if ($missingColumns !== []) {
+                return back()->withInput()->with(
+                    'error',
+                    'Faltan columnas obligatorias: '.implode(', ', $missingColumns).'.',
+                );
             }
+
+            $rows = [];
+            $errors = [];
+            $seenPeriods = [];
+            $line = 1;
+
+            while (($data = fgetcsv($handle, 2000, ',')) !== false) {
+                $line++;
+                if (count($data) !== count($header)) {
+                    $errors[] = "Línea {$line}: cantidad de columnas distinta de la cabecera.";
+
+                    continue;
+                }
+
+                $row = array_combine($header, $data);
+                $code = trim((string) ($row['codigo_iglesia'] ?? ''));
+                $churchId = $iglesiasMap[$code] ?? null;
+                $year = $this->parseNonNegativeInteger($row['anio'] ?? null);
+                $month = $this->parseNonNegativeInteger($row['mes'] ?? null);
+                $active = $this->parseNonNegativeInteger($row['total_activos'] ?? null);
+                $inactive = $this->parseNonNegativeInteger($row['total_inactivos'] ?? 0);
+                $newMembers = $this->parseNonNegativeInteger($row['total_nuevos'] ?? 0);
+                $transferred = $this->parseNonNegativeInteger($row['total_transferidos'] ?? 0);
+                $withdrawals = $this->parseNonNegativeInteger($row['total_bajas'] ?? 0);
+                $state = Str::lower(trim((string) ($row['estado'] ?? '')));
+
+                if (! $churchId) {
+                    $errors[] = "Línea {$line}: código de iglesia no reconocido ({$code}).";
+                }
+                if ($year === null || $year < 2000 || $year > 2050) {
+                    $errors[] = "Línea {$line}: año inválido.";
+                }
+                if ($month === null || $month < 1 || $month > 12) {
+                    $errors[] = "Línea {$line}: mes inválido.";
+                }
+                if (in_array(null, [$active, $inactive, $newMembers, $transferred, $withdrawals], true)) {
+                    $errors[] = "Línea {$line}: los conteos deben ser números enteros no negativos.";
+                }
+                if (! in_array($state, ['validado', 'cerrado'], true)) {
+                    $errors[] = "Línea {$line}: los históricos deben estar validados o cerrados.";
+                }
+
+                if (! $churchId || $year === null || $month === null || $active === null
+                    || $inactive === null || $newMembers === null || $transferred === null
+                    || $withdrawals === null || ! in_array($state, ['validado', 'cerrado'], true)) {
+                    continue;
+                }
+
+                $periodKey = "{$churchId}-{$year}-{$month}";
+                if (isset($seenPeriods[$periodKey])) {
+                    $errors[] = "Línea {$line}: registro duplicado para la misma iglesia y mes.";
+
+                    continue;
+                }
+                $seenPeriods[$periodKey] = true;
+
+                $cutDate = trim((string) ($row['fecha_corte'] ?? ''));
+                if ($cutDate === '') {
+                    $cutDate = date('Y-m-t', strtotime("{$year}-{$month}-01"));
+                }
+                $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $cutDate);
+                if (! $parsedDate || $parsedDate->format('Y-m-d') !== $cutDate) {
+                    $errors[] = "Línea {$line}: fecha de corte inválida; utilice AAAA-MM-DD.";
+
+                    continue;
+                }
+
+                $rows[] = [
+                    'iglesia_id' => $churchId,
+                    'anio' => $year,
+                    'mes' => $month,
+                    'total_activos' => $active,
+                    'total_inactivos' => $inactive,
+                    'total_nuevos' => $newMembers,
+                    'total_transferidos' => $transferred,
+                    'total_bajas' => $withdrawals,
+                    'fecha_corte' => $cutDate,
+                    'estado' => $state,
+                ];
+            }
+        } finally {
+            fclose($handle);
         }
 
-        return back()->with('error', 'No se pudo abrir el archivo CSV subido.');
+        if ($errors !== []) {
+            $detail = implode(' ', array_slice($errors, 0, 8));
+            $remaining = count($errors) - min(count($errors), 8);
+            if ($remaining > 0) {
+                $detail .= " Existen {$remaining} errores adicionales.";
+            }
+
+            return back()->withInput()->with(
+                'error',
+                'Importación cancelada sin modificar la base de datos. '.$detail,
+            );
+        }
+
+        if ($rows === []) {
+            return back()->withInput()->with('error', 'El archivo no contiene registros válidos para importar.');
+        }
+
+        $userId = auth()->id();
+        $sourceFile = basename($file->getClientOriginalName());
+        $fileHash = hash_file('sha256', $file->getRealPath());
+
+        DB::transaction(function () use ($reemplazar, $rows, $validated, $sourceFile, $fileHash, $userId): void {
+            if ($reemplazar) {
+                ConteoMembresia::query()->delete();
+            }
+
+            foreach ($rows as $row) {
+                ConteoMembresia::updateOrCreate(
+                    [
+                        'iglesia_id' => $row['iglesia_id'],
+                        'anio' => $row['anio'],
+                        'mes' => $row['mes'],
+                    ],
+                    [
+                        ...$row,
+                        'es_sintetico' => false,
+                        'fuente_datos' => $validated['fuente_datos'],
+                        'version_datos' => $validated['version_datos'] ?? null,
+                        'archivo_origen' => $sourceFile,
+                        'hash_archivo' => $fileHash,
+                        'observaciones_calidad' => $validated['observaciones_calidad'] ?? null,
+                        'registrado_por' => $userId,
+                    ],
+                );
+            }
+        });
+
+        $compuerta = $this->obtenerResumenCompuerta();
+        $mensaje = 'Se importaron '.count($rows)." registros históricos reales. Total de meses distritales: {$compuerta['total_meses']}.";
+        $mensaje .= $compuerta['aprobada_validacion_real']
+            ? ' La serie cumple suficiencia, continuidad y cobertura de las 24 iglesias para la evaluación temporal.'
+            : ' La validación predictiva continuará pendiente hasta reunir al menos 36 meses continuos y completos de las 24 iglesias.';
+
+        return redirect()->route('conteos.index')->with('success', $mensaje);
     }
 
     public function regenerarFicticios()
     {
+        abort_unless(
+            (bool) config('sigem.allow_synthetic_data'),
+            403,
+            'La generación de datos sintéticos está deshabilitada en este entorno.',
+        );
+
         $userId = auth()->id();
         $iglesias = Iglesia::where('estado', 'activo')->get();
 
@@ -355,7 +425,7 @@ class ConteoController extends Controller
 
         DB::beginTransaction();
         try {
-            ConteoMembresia::truncate();
+            ConteoMembresia::query()->delete();
 
             // 45 continuous months: Jan 2023 to Sep 2026
             $meses = [];
@@ -404,6 +474,9 @@ class ConteoController extends Controller
                         'fecha_corte' => $fechaCorte,
                         'estado' => 'cerrado',
                         'es_sintetico' => true,
+                        'fuente_datos' => 'generador_sintetico_sigem',
+                        'version_datos' => 'prueba_funcional',
+                        'observaciones_calidad' => 'Dato ficticio generado exclusivamente para pruebas funcionales.',
                         'registrado_por' => $userId,
                     ]);
                 }
@@ -418,5 +491,27 @@ class ConteoController extends Controller
 
             return back()->with('error', 'Error al regenerar serie sintética: '.$e->getMessage());
         }
+    }
+
+    private function iglesiasPermitidas(User $user): Collection
+    {
+        $query = Iglesia::query()->where('estado', 'activo')->orderBy('nombre');
+
+        if ($user->isLocal()) {
+            $query->whereKey($user->iglesia_id);
+        } elseif ($user->isCircuito()) {
+            $query->where('circuito_id', $user->circuito_id);
+        }
+
+        return $query->get();
+    }
+
+    private function parseNonNegativeInteger(mixed $value): ?int
+    {
+        $parsed = filter_var(trim((string) $value), FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 0],
+        ]);
+
+        return $parsed === false ? null : (int) $parsed;
     }
 }
